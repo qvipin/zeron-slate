@@ -1,0 +1,5 @@
+#!/bin/sh
+# Refuses a commit whose message carries an AI co-author trailer or a
+# "generated with" footer. Turn on once per clone:
+#   git config core.hooksPath .githooks
+exec python3 "$(git rev-parse --show-toplevel)/scripts/lint_attribution.py" message "$1"

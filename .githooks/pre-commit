@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the same checks as CI's (all but compiling the Luau) before a commit.
+root="$(git rev-parse --show-toplevel)"
+python3 "$root/scripts/lint_attribution.py" files && python3 "$root/scripts/check_template.py"
