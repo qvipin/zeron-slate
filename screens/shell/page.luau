@@ -16,6 +16,9 @@ local ds = require("@ds")
 local motion = require("@ds/motion")
 local locale = require("@ds/locale")
 local route = require("@app/screens/shell/route")
+-- Slate: what there is to update (Zeron, and the agents on every device), as
+-- Zeron's own top bar has it: Zeron's button, kept in step with it.
+local updates = require("@app/screens/shell/updates")
 local shell_view = require("@app/screens/shell/view")
 local fit = require("@app/screens/shell/fit")
 local sessions = require("@account/sessions")
@@ -250,6 +253,22 @@ return function(props: Props): Node
 	local function full_screen_shift(full: boolean?, tracked: boolean?): number
 		return title_left(full, tracked) - title_left(false, tracked)
 	end
+	-- Slate: what there is to update, on the bar's line beside its controls
+	-- at the right (Zeron's top bar's button): nothing with nothing to say.
+	table.insert(
+		pane,
+		ui.show(updates.shown, ui.div {
+			absolute = true,
+			right = function(): number
+				return ui.raw(TITLE_RIGHT - 10 + ds.TitleBar.actions_right(), "off the title bar's controls")
+			end,
+			top = function(): number
+				return ds.TitleBar.middle() - 14
+			end,
+			pointer_events = "auto",
+			updates.Button {},
+		})
+	)
 	local header_ref = ui.ref()
 	ds.TitleBar.follow(header_ref, {
 		x = function(full: boolean): number
@@ -289,7 +308,10 @@ return function(props: Props): Node
 				-- window's buttons where they stand there; TITLE_RIGHT counts the
 				-- bar's row padding, 10, which `actions_right` gives as it is.)
 				right = function(): number
-					return ui.raw(TITLE_RIGHT - 10 + ds.TitleBar.actions_right(), "the title bar's controls at the right, and their room")
+					-- (Slate: and clear of what there is to update, beside them.)
+					local button = updates.width()
+					local right = TITLE_RIGHT - 10 + ds.TitleBar.actions_right()
+					return ui.raw(if button > 0 then right + button + 8 else right, "the title bar's controls at the right, and their room")
 				end,
 				gap = "$zeron.space.tight",
 				items = "center",

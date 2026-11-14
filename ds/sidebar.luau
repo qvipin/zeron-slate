@@ -260,6 +260,9 @@ local EDGE = 8
 -- the actions' icons, you) start TOP in from the sidebar's edge; chats a
 -- step (STEP) further in, their titles at TOP + STEP.
 local TOP, STEP = 12, 12
+-- Slate: how far a chat stands in from its heading, past where its mark
+-- would line up: slight, near flush, alike under every heading.
+local NUDGE = 2.5
 -- Slate: the bottom bar (you), a two-line row's height.
 local FOOT = 46
 -- Slate: the usage strip over the bottom bar, and whether it shows (yours to
@@ -1124,7 +1127,8 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 		return TOP + STEP - EDGE - 8
 	end
 	local gutter = function(_t: Tree): number
-		return chat_indent()
+		-- (A group's "Show N more", its chevron where its chats' marks stand.)
+		return chat_indent() + NUDGE
 	end
 	-- Where a session's row starts, from its gutter: its harness's mark
 	-- (14, centred in its slot); hidden, its words (its project's icon, or
@@ -1379,7 +1383,9 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			-- project, Pinned, a section of yours, Activity), one hierarchy
 			-- throughout; a flyout's rows are its own list.
 			indent = if in_flyout then nil else function(): number
-				return chat_indent()
+				-- (A slight step in, near flush, the same under every heading:
+				-- a section's, a project's, Pinned, Activity, Ungrouped.)
+				return chat_indent() + NUDGE
 			end,
 			center_lead = true,
 			-- (Its slot holds its harness; hidden, the slot closes.)
