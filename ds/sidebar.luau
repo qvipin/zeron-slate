@@ -4365,7 +4365,7 @@ fn layer(input:LayerInput)->vec4<f32> {
 	local strip_w = ui.use_state(0)
 	if props.user then
 		-- Slate: each signed-in harness's plan, as Paseo shows them: its mark,
-		-- a pill of its week, the week's percent ("wk"). The account in use (or
+		-- a pill of what's left of its week, that percent, exact ("wk"). The account in use (or
 		-- the first). Its session and week both in the tooltip.
 		type Use = { id: string, name: string, mark: string?, session: number, week: number }
 		local function uses(): { Use }
@@ -4389,8 +4389,20 @@ fn layer(input:LayerInput)->vec4<f32> {
 				agents.load()
 			end
 		end)
+		-- Slate: what's left of a window (used is `f`), exact: a whole
+		-- percent as one, else to the hundredth ("42.37%"), never rounded to
+		-- a whole one.
+		local function left_pct(f: number): number
+			return (1 - math.clamp(f, 0, 1)) * 100
+		end
 		local function pct(f: number): string
-			return `{math.floor(math.clamp(f, 0, 1) * 100 + 0.5)}%`
+			local v = left_pct(f)
+			local whole = math.floor(v + 0.5)
+			if math.abs(v - whole) < 0.005 then
+				return `{whole}%`
+			end
+			local s = string.gsub(string.format("%.2f", v), "0+$", "")
+			return `{s}%`
 		end
 		local function tone(f: number): string
 			return if f >= 0.95 then "danger" elseif f >= 0.8 then "warning" else "neutral"
@@ -4402,14 +4414,24 @@ fn layer(input:LayerInput)->vec4<f32> {
 		-- the narrowest (a mark and "100%"), the rest go to a second line.
 		-- (Widths as drawn: the mark and its gap, "57%", " wk", the shortest
 		-- pill worth drawing and its gap, the gap between plans.)
-		local MARK_W, PCT_W, WK_W, PILL_MIN, GAP_W = 14 + 6, 28, 3 + 16, 10 + 6, 10
+		local MARK_W, WK_W, PILL_MIN, GAP_W = 14 + 6, 3 + 16, 10 + 6, 10
+		-- The percent's room: "100%" whole, "42.37%" with decimals (as any
+		-- plan shown needs, so their shares stay alike).
+		local function pct_w(): number
+			for _, u in uses() do
+				if string.find(pct(u.week), ".", 1, true) then
+					return 40
+				end
+			end
+			return 28
+		end
 		local function share(): number
 			local n = #uses()
 			-- (The strip's own width, measured; the sidebar's till it is. A
 			-- pixel spare, so rounding never wraps the last.)
 			local w = strip_w:get()
 			local room = (if w > 0 then w else shown_w:get()) - TOP - (EDGE + 4) - 1
-			local per_line = math.max(1, math.floor((room + GAP_W) / (MARK_W + PCT_W + GAP_W)))
+			local per_line = math.max(1, math.floor((room + GAP_W) / (MARK_W + pct_w() + GAP_W)))
 			local k = math.min(n, per_line)
 			return (room - GAP_W * (k - 1)) / k
 		end
@@ -4417,11 +4439,11 @@ fn layer(input:LayerInput)->vec4<f32> {
 		-- 96; none at all under 10 (the percent alone then).
 		-- Narrowing, "wk" goes first, then the pill: the mark and percent stay.
 		local function bar_w(): number
-			local left = share() - MARK_W - PCT_W - 6
+			local left = share() - MARK_W - pct_w() - 6
 			return if left >= 10 then math.min(left, 96) else 0
 		end
 		local function with_wk(): boolean
-			return share() >= MARK_W + PCT_W + PILL_MIN + WK_W
+			return share() >= MARK_W + pct_w() + PILL_MIN + WK_W
 		end
 		usage = ui.show(function(): boolean
 			return usage_on:get() and #uses() > 0
@@ -4458,7 +4480,7 @@ fn layer(input:LayerInput)->vec4<f32> {
 				tooltip = Tooltip {
 					function(): string
 						local u = now:get()
-						return `{u.name}: session {pct(u.session)} · week {pct(u.week)}`
+						return `{u.name}: session {pct(u.session)} left · week {pct(u.week)} left`
 					end,
 				},
 				ui.presence(function(): string
@@ -4480,13 +4502,16 @@ fn layer(input:LayerInput)->vec4<f32> {
 					min_w = 10,
 					max_w = 96,
 					progress.ProgressBar {
-						value = week,
+						-- (Filled with what's left.)
+						value = function(): number
+							return 1 - math.clamp(week(), 0, 1)
+						end,
 						tone = function(): any
 							return tone(week())
 						end,
 						size = "regular",
 						w_full = true,
-						label = "Week's usage",
+						label = "Week left",
 					},
 				},
 				ui.row {
