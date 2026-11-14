@@ -306,6 +306,7 @@ function M.setup()
 					wide = 5,
 					tray = { inset = 4, row = 300 },
 					control = { inset = 6 },
+					thumb = { w = 240, h = 160 },
 				},
 			},
 			-- Reasoning effort, a colour a level, cool to warm as it rises: mid
