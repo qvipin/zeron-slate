@@ -39,6 +39,16 @@ git config core.hooksPath .githooks
 
 CI (`.github/workflows/ci.yml`) runs all three on every push and pull request.
 
+## Zeron releases
+
+`.github/workflows/zeron-release.yml` checks Slate against each new Zeron release (it looks every three hours, or run it by hand from Actions). It fetches Zeron's interface source at the version Slate names in `zeron_version` and at the new one, and runs `scripts/check_zeron_release.py`, which reports:
+
+- files Slate replaces whose Zeron original changed (against Zeron v2's copy where Slate's comes from it), with the diffs;
+- modules, locale keys and icons Slate uses that no longer exist, and module members Zeron may have dropped;
+- files that no longer compile.
+
+When nothing needs a look, it opens a pull request that moves `zeron_version` to the new release and rewrites `.base.json`, the fingerprints of Zeron's originals that Zeron's own "out of date" check compares against. Otherwise it opens an issue with the report. Nothing is merged on its own.
+
 ## Attribution
 
 Slate is credited to its author alone. Commits and files must not carry AI co-author trailers or "generated with" footers. The attribution check enforces this.

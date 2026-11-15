@@ -1,0 +1,156 @@
+# On each new Zeron release, check that Slate still fits it
+# (scripts/check_zeron_release.py). Clean: a pull request moves Slate to the
+# new version. Not clean: an issue says what to look at, with Zeron's diffs.
+# Nothing is merged on its own.
+#
+# A repository can't follow another's releases, so this looks every three
+# hours; Actions → "Zeron release" → Run workflow checks one by hand.
+name: Zeron release
+
+on:
+  schedule:
+    - cron: "23 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Zeron version to check (x.y.z); empty for the latest release"
+        required: false
+      force:
+        description: "Check even if Slate already names this version"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: zeron-release
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Which versions
+        id: v
+        run: |
+          set -euo pipefail
+          made_for="$(python3 -c 'import json; print(json.load(open("zeron-template.json"))["zeron_version"])')"
+          if [ -n "${{ inputs.version }}" ]; then
+            latest="${{ inputs.version }}"
+          else
+            latest="$(gh release view --repo zeronsh/zeron --json tagName --jq .tagName)"
+            latest="${latest#v}"
+          fi
+          echo "made_for=$made_for" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          if [ "$made_for" = "$latest" ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "Slate already names Zeron $latest."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Already looked at
+        id: seen
+        if: steps.v.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          branch="zeron-${{ steps.v.outputs.latest }}"
+          title="Zeron ${{ steps.v.outputs.latest }}: Slate needs a look"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            echo "A pull request branch for this version exists already."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')" ] \
+               && [ "${{ inputs.force }}" != "true" ]; then
+            echo "An open issue covers this version already."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Zeron's interface, then and now
+        if: steps.v.outputs.skip == 'false' && steps.seen.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          for which in made_for latest; do
+            if [ "$which" = made_for ]; then tag="v${{ steps.v.outputs.made_for }}"; else tag="v${{ steps.v.outputs.latest }}"; fi
+            git clone --quiet --depth 1 --branch "$tag" --filter=blob:none --sparse \
+              https://github.com/zeronsh/zeron "/tmp/zeron-$which"
+            git -C "/tmp/zeron-$which" sparse-checkout set apps/zgx/ui
+          done
+
+      - name: Install Luau
+        if: steps.v.outputs.skip == 'false' && steps.seen.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/luau.zip https://github.com/luau-lang/luau/releases/download/0.747/luau-ubuntu.zip
+          unzip -q /tmp/luau.zip -d /tmp/luau
+          chmod +x /tmp/luau/*
+          echo "/tmp/luau" >> "$GITHUB_PATH"
+
+      - name: Check
+        id: check
+        if: steps.v.outputs.skip == 'false' && steps.seen.outputs.skip == 'false'
+        run: |
+          set -uo pipefail
+          status=0
+          python3 scripts/check_zeron_release.py \
+            --old /tmp/zeron-made_for/apps/zgx/ui \
+            --new /tmp/zeron-latest/apps/zgx/ui \
+            --version "${{ steps.v.outputs.latest }}" \
+            --report /tmp/report.md --bless || status=1
+          python3 scripts/check_template.py >> /tmp/template.txt 2>&1 || status=1
+          failed=""
+          while IFS= read -r -d '' f; do
+            luau-compile --binary "$f" > /dev/null 2>/tmp/err.txt || failed="$failed\n- \`${f#./}\`: $(head -c 300 /tmp/err.txt)"
+          done < <(find . -name '*.luau' -not -path './.git/*' -print0)
+          if [ -n "$failed" ]; then
+            status=1
+            printf '\n### Files that no longer compile\n%b\n' "$failed" >> /tmp/report.md
+          fi
+          if ! grep -q "template: ok" /tmp/template.txt; then
+            printf '\n### Template check\n\n```\n%s\n```\n' "$(cat /tmp/template.txt)" >> /tmp/report.md
+          fi
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clean, a pull request
+        if: steps.check.outputs.status == '0'
+        run: |
+          set -euo pipefail
+          v="${{ steps.v.outputs.latest }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "zeron-$v"
+          git add zeron-template.json .base.json
+          git commit -m "Check against Zeron $v" -m "Nothing Slate replaces changed in Zeron $v, and everything it uses is still there."
+          git push origin "zeron-$v"
+          gh pr create --base main --head "zeron-$v" \
+            --title "Zeron $v: Slate fits as it is" --body-file /tmp/report.md
+
+      - name: Not clean, an issue
+        if: steps.check.outputs.status == '1'
+        run: |
+          set -euo pipefail
+          v="${{ steps.v.outputs.latest }}"
+          title="Zeron $v: Slate needs a look"
+          body=/tmp/report.md
+          # (An issue body holds 65,536 characters.)
+          if [ "$(wc -c < "$body")" -gt 60000 ]; then
+            head -c 60000 "$body" > /tmp/short.md
+            printf '\n\n… cut short; the run'"'"'s summary has the whole report.\n' >> /tmp/short.md
+            body=/tmp/short.md
+          fi
+          n="$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number')"
+          if [ -n "$n" ]; then
+            gh issue edit "$n" --body-file "$body"
+          else
+            gh issue create --title "$title" --body-file "$body"
+          fi
