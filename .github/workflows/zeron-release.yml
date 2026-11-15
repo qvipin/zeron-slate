@@ -122,7 +122,9 @@ jobs:
           cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean, a pull request
-        if: steps.check.outputs.status == '0'
+        # (Only when the check ran: a skipped one's status is empty, and
+        # Actions compares '' == '0' as true.)
+        if: steps.check.outcome == 'success' && steps.check.outputs.status == '0'
         run: |
           set -euo pipefail
           v="${{ steps.v.outputs.latest }}"
@@ -136,7 +138,7 @@ jobs:
             --title "Zeron $v: Slate fits as it is" --body-file /tmp/report.md
 
       - name: Not clean, an issue
-        if: steps.check.outputs.status == '1'
+        if: steps.check.outcome == 'success' && steps.check.outputs.status == '1'
         run: |
           set -euo pipefail
           v="${{ steps.v.outputs.latest }}"
