@@ -4374,7 +4374,11 @@ fn layer(input:LayerInput)->vec4<f32> {
 		-- a pill of what's left of its week, that percent, exact ("wk"). The account in use (or
 		-- the first). Its session and week both in the tooltip.
 		type Use = { id: string, name: string, mark: string?, session: number, week: number }
-		local function uses(): { Use }
+		-- Slate: three at most, those you've used most lately (by your chats'
+		-- last moves, each chat's agent its mark); never used, after, in the
+		-- engine's order.
+		local MOST_USES = 3
+		local top_uses = ui.computed(function(): { Use }
 			local out: { Use } = {}
 			for _, a in (agents.now:get() :: any).list or {} do
 				if a.enabled ~= false and a.accounts and #a.accounts > 0 then
@@ -4387,7 +4391,35 @@ fn layer(input:LayerInput)->vec4<f32> {
 					table.insert(out, { id = a.id, name = a.name, mark = a.mark, session = acc.session or 0, week = acc.week or 0 })
 				end
 			end
+			-- When each agent last moved in any of your chats.
+			local last: { [string]: number } = {}
+			for _, s in index:get().everything do
+				local k, t = s.agent, s.time
+				if k and type(t) == "number" and t > (last[k] or -1) then
+					last[k] = t
+				end
+			end
+			local order: { [string]: number } = {}
+			for i, u in out do
+				order[u.id] = i
+			end
+			local function used(u: Use): number
+				return math.max(last[u.mark or ""] or -1, last[u.id] or -1)
+			end
+			table.sort(out, function(a: Use, b: Use): boolean
+				local ta, tb = used(a), used(b)
+				if ta ~= tb then
+					return ta > tb
+				end
+				return order[a.id] < order[b.id]
+			end)
+			while #out > MOST_USES do
+				table.remove(out)
+			end
 			return out
+		end)
+		local function uses(): { Use }
+			return top_uses:get()
 		end
 		-- (Loaded once; the engine probes usage itself after, and says.)
 		ui.effect(function()
@@ -4417,7 +4449,8 @@ fn layer(input:LayerInput)->vec4<f32> {
 		-- two or three spread across it alike.
 		-- Each plan's share of the strip's width (the sidebar's, less its
 		-- insets and the gaps between), one line's worth: past what fits at
-		-- the narrowest (a mark and "100%"), the rest go to a second line.
+		-- the narrowest that keeps its pill (a mark, the shortest pill and
+		-- "100%"), the rest go to the next line.
 		-- (Widths as drawn: the mark and its gap, "57%", " wk", the shortest
 		-- pill worth drawing and its gap, the gap between plans.)
 		local MARK_W, WK_W, PILL_MIN, GAP_W = 14 + 6, 3 + 16, 10 + 6, 10
@@ -4437,7 +4470,10 @@ fn layer(input:LayerInput)->vec4<f32> {
 			-- pixel spare, so rounding never wraps the last.)
 			local w = strip_w:get()
 			local room = (if w > 0 then w else shown_w:get()) - TOP - (EDGE + 4) - 1
-			local per_line = math.max(1, math.floor((room + GAP_W) / (MARK_W + pct_w() + GAP_W)))
+			-- (As many to a line as each keeps its pill: past that, the next
+			-- line, in the same columns. Too many and they'd fit only as a
+			-- mark and a percent, pills gone.)
+			local per_line = math.max(1, math.floor((room + GAP_W) / (MARK_W + pct_w() + PILL_MIN + GAP_W)))
 			local k = math.min(n, per_line)
 			return (room - GAP_W * (k - 1)) / k
 		end

@@ -253,22 +253,6 @@ return function(props: Props): Node
 	local function full_screen_shift(full: boolean?, tracked: boolean?): number
 		return title_left(full, tracked) - title_left(false, tracked)
 	end
-	-- Slate: what there is to update, on the bar's line beside its controls
-	-- at the right (Zeron's top bar's button): nothing with nothing to say.
-	table.insert(
-		pane,
-		ui.show(updates.shown, ui.div {
-			absolute = true,
-			right = function(): number
-				return ui.raw(TITLE_RIGHT - 10 + ds.TitleBar.actions_right(), "off the title bar's controls")
-			end,
-			top = function(): number
-				return ds.TitleBar.middle() - 14
-			end,
-			pointer_events = "auto",
-			updates.Button {},
-		})
-	)
 	local header_ref = ui.ref()
 	ds.TitleBar.follow(header_ref, {
 		x = function(full: boolean): number
@@ -860,7 +844,28 @@ return function(props: Props): Node
 		grow = 1,
 		min_w = 0,
 		h_full = true,
+		relative = true,
 		ui.column(pane),
 		beside,
+		-- Slate: what there is to update, in the bar's corner beside the Panel
+		-- toggle (Zeron's top bar's button, as far off it): nothing with
+		-- nothing to say. On the row, not the page, so it holds the window's
+		-- corner with the files open; last, so no drag strip is over it and
+		-- it keeps its presses.
+		ui.show(updates.shown, ui.div {
+			absolute = true,
+			right = function(): number
+				-- (In the corner itself where the bar has no Panel toggle: it
+				-- shows over a chat or a plugin's page, as the title bar has it.)
+				local name = route.current:get().name
+				local toggle = if name == "session" or name == "plugin" then 24 + 8 else 0
+				return ui.raw(toggle + ds.TitleBar.actions_right(), "the corner, or off the panel toggle")
+			end,
+			top = function(): number
+				return ds.TitleBar.middle() - 14
+			end,
+			pointer_events = "auto",
+			updates.Button {},
+		}),
 	}
 end
