@@ -16,6 +16,9 @@ reports:
               source, not by running it)
   - strings:  locale keys Slate uses that the new en.json lacks
   - icons:    icon names Slate uses that ds/icon.luau no longer lists
+  - globals:  a module name a file reads (`Dock.hero_offset()`) that it
+              never declares or requires (Zeron's own files have shipped
+              this; compiling doesn't catch it, loading does)
 
 With --bless it also moves Slate to the new version: `zeron_version` in the
 manifest, and `.base.json`, the fingerprints of Zeron's originals that
@@ -156,7 +159,7 @@ def flatten(d, prefix=""):
 
 
 def check(old, new):
-    found = {"changed": [], "removed": [], "requires": [], "members": [], "strings": [], "icons": []}
+    found = {"changed": [], "removed": [], "requires": [], "members": [], "strings": [], "icons": [], "globals": []}
     luau = [r for r in slate_files() if r.endswith(".luau")]
 
     for rel in sorted(slate_files()):
@@ -201,12 +204,37 @@ def check(old, new):
         for name in sorted(set(ICON.findall(src))):
             if icons and name not in icons:
                 found["icons"].append(f"`{rel}` uses icon `{name}`")
+        for name in undeclared(src):
+            found["globals"].append(f"`{rel}` reads `{name}` without declaring or requiring it")
     return found
+
+
+def undeclared(src):
+    """Capitalised names read as modules (`Name.x`, `Name {`, `Name(`) that
+    the file never declares: not a local, a function, a parameter, a loop
+    variable or a type."""
+    code = re.sub(r"--\[(=*)\[.*?\]\1\]", "", src, flags=re.S)
+    code = re.sub(r"--[^\n]*", "", code)
+    code = re.sub(r'"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|`(?:\\.|[^`\\])*`', '""', code)
+    code = re.sub(r"\[(=*)\[.*?\]\1\]", '""', code, flags=re.S)
+    declared = set()
+    for m in re.finditer(r"\blocal\s+function\s+(\w+)|\bfunction\s+(\w+)\b", code):
+        declared.add(m.group(1) or m.group(2))
+    for m in re.finditer(r"\blocal\s+([\w\s,:<>?|{}()\[\].]+?)(?==|\n|$)", code):
+        declared |= set(re.findall(r"(?:^|,)\s*(\w+)", m.group(1)))
+    for m in re.finditer(r"\bfor\s+([\w\s,]+?)\s+in\b|\bfor\s+(\w+)\s*=", code):
+        declared |= set(re.findall(r"\w+", m.group(1) or m.group(2)))
+    for m in re.finditer(r"function\s*[\w.:]*\s*\(([^)]*)\)", code):
+        declared |= set(re.findall(r"(?:^|,)\s*(\w+)", m.group(1)))
+    declared |= set(re.findall(r"\b(?:export\s+)?type\s+(\w+)", code))
+    builtins = {"Enum", "Instance", "Vector3", "Color3", "UDim2"}
+    used = set(re.findall(r"(?<![\w.:])([A-Z]\w*)\s*(?:\.\w|\{|\()", code))
+    return sorted(u for u in used - declared - builtins)
 
 
 def report(found, old_v, new_v):
     lines = [f"Checked Slate against **Zeron {new_v}** (it was made for {old_v})."]
-    needs = any(found[k] for k in ("changed", "removed", "requires", "strings", "icons"))
+    needs = any(found[k] for k in ("changed", "removed", "requires", "strings", "icons", "globals"))
     lines.append("")
     lines.append("Needs a look." if needs else "Nothing Slate replaces changed, and everything it uses is still there.")
     titles = {
@@ -214,6 +242,7 @@ def report(found, old_v, new_v):
         "requires": "Modules that no longer exist",
         "strings": "Locale keys that no longer exist",
         "icons": "Icons that no longer exist",
+        "globals": "Module names read but never declared",
         "members": "Module members Zeron may no longer define (check by hand)",
     }
     for key, title in titles.items():
