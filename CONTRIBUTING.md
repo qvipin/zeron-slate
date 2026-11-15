@@ -41,13 +41,13 @@ CI (`.github/workflows/ci.yml`) runs all three on every push and pull request.
 
 ## Zeron releases
 
-`.github/workflows/zeron-release.yml` checks Slate against each new Zeron release (it looks every three hours, or run it by hand from Actions). It fetches Zeron's interface source at the version Slate names in `zeron_version` and at the new one, and runs `scripts/check_zeron_release.py`, which reports:
+`.github/workflows/zeron-release.yml` brings each new Zeron release into Slate (it looks every three hours, or run it by hand from Actions). It fetches Zeron's interface source at the version Slate names in `zeron_version` and at the new one, merges Zeron's changes into each file Slate replaces (a three-way merge: Zeron then, Slate's copy, Zeron now), and runs `scripts/check_zeron_release.py` on the result, which reports:
 
-- files Slate replaces whose Zeron original changed (against Zeron v2's copy where Slate's comes from it), with the diffs;
-- modules, locale keys and icons Slate uses that no longer exist, and module members Zeron may have dropped;
+- files whose merge conflicts with Slate's own changes (left as they were), with Zeron's diffs;
+- modules, locale keys and icons Slate uses that no longer exist, module names a file reads but never declares, and module members Zeron may have dropped;
 - files that no longer compile.
 
-When nothing needs a look, it opens a pull request that moves `zeron_version` to the new release and rewrites `.base.json`, the fingerprints of Zeron's originals that Zeron's own "out of date" check compares against. Otherwise it opens an issue with the report. Nothing is merged on its own.
+When everything merges and passes, it opens a pull request with the merged files that moves `zeron_version` to the new release and rewrites `.base.json`, the fingerprints of Zeron's originals that Zeron's own "out of date" check compares against. Otherwise it opens an issue with the report. Nothing reaches `main` until you merge it.
 
 ## Attribution
 

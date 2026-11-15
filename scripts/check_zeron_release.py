@@ -20,13 +20,16 @@ reports:
               never declares or requires (Zeron's own files have shipped
               this; compiling doesn't catch it, loading does)
 
-With --bless it also moves Slate to the new version: `zeron_version` in the
+With --merge it brings Zeron's changes into Slate's copies first (a
+three-way merge per file; one that conflicts is left as it was) and runs
+the checks on the result. With --bless, when nothing needs a look, it also
+moves Slate to the new version: `zeron_version` in the
 manifest, and `.base.json`, the fingerprints of Zeron's originals that
 Zeron's own "out of date" check compares against.
 
 Usage:
   check_zeron_release.py --old OLD_UI --new NEW_UI --version X.Y.Z \\
-      [--report report.md] [--bless]
+      [--report report.md] [--merge] [--bless]
 
 Exit status: 0 when nothing needs attention, 1 when something does.
 """
@@ -232,11 +235,54 @@ def undeclared(src):
     return sorted(u for u in used - declared - builtins)
 
 
-def report(found, old_v, new_v):
+def merge(old, new, changed):
+    """Bring Zeron's changes into Slate's copies: a three-way merge of each
+    changed file (Zeron then, Slate's copy, Zeron now). A clean merge is
+    written over Slate's copy; one that conflicts leaves it as it was.
+    Returns (merged, conflicted), lists of paths."""
+    import subprocess
+    merged, conflicted = [], []
+    for rel, _diff in changed:
+        base, theirs = origin(old, rel), origin(new, rel)
+        if not os.path.isfile(base):
+            conflicted.append((rel, "Zeron had no such file before; Slate's copy came from elsewhere"))
+            continue
+        ours = os.path.join(ROOT, rel)
+        r = subprocess.run(
+            ["git", "merge-file", "-p", "-L", "Slate", "-L", "Zeron (was)", "-L", "Zeron (now)", ours, base, theirs],
+            capture_output=True,
+        )
+        if r.returncode == 0:
+            with open(ours, "wb") as f:
+                f.write(r.stdout)
+            merged.append(rel)
+        elif r.returncode > 0:
+            conflicted.append((rel, f"{r.returncode} conflicting change(s) with Slate's own"))
+        else:
+            conflicted.append((rel, r.stderr.decode("utf-8", "replace").strip() or "git merge-file failed"))
+    return merged, conflicted
+
+
+PROBLEMS = ("removed", "requires", "strings", "icons", "globals")
+
+
+def report(found, old_v, new_v, merging=None):
+    """The report, and whether something needs a person. Merging, a change
+    Zeron made is brought in, not a problem; a conflict is."""
     lines = [f"Checked Slate against **Zeron {new_v}** (it was made for {old_v})."]
-    needs = any(found[k] for k in ("changed", "removed", "requires", "strings", "icons", "globals"))
+    merged, conflicted = merging if merging is not None else ([], [])
+    if merging is None:
+        needs = bool(found["changed"]) or any(found[k] for k in PROBLEMS)
+    else:
+        needs = bool(conflicted) or any(found[k] for k in PROBLEMS)
     lines.append("")
-    lines.append("Needs a look." if needs else "Nothing Slate replaces changed, and everything it uses is still there.")
+    if not needs:
+        lines.append(
+            f"Zeron's changes to {len(merged)} file(s) Slate replaces merged cleanly, and everything Slate uses is still there."
+            if merged else "Nothing Slate replaces changed, and everything it uses is still there."
+        )
+    else:
+        lines.append("Needs a look.")
     titles = {
         "removed": "Files Slate replaces that Zeron removed",
         "requires": "Modules that no longer exist",
@@ -245,12 +291,19 @@ def report(found, old_v, new_v):
         "globals": "Module names read but never declared",
         "members": "Module members Zeron may no longer define (check by hand)",
     }
+    if conflicted:
+        lines += ["", "### Couldn't merge", "", "Zeron changed these where Slate changed them too. Slate's copy is left as it was; bring Zeron's change in by hand (its diff is below), then run the check again.", ""]
+        lines += [f"- `{rel}`: {why}" for rel, why in conflicted]
     for key, title in titles.items():
         if found[key]:
             lines += ["", f"### {title}", ""] + [f"- {x}" for x in found[key]]
     if found["changed"]:
-        lines += ["", "### Zeron changed files Slate replaces", "",
-                  "Bring what applies into Slate's copy, then rerun this check.", ""]
+        if merging is None:
+            lines += ["", "### Zeron changed files Slate replaces", "",
+                      "Bring what applies into Slate's copy, then rerun this check.", ""]
+        else:
+            lines += ["", "### What Zeron changed", "",
+                      "Merged into Slate's copy" + (" (except the files above)" if conflicted else "") + ":", ""]
         for rel, diff in found["changed"]:
             cut = diff if len(diff) < 12000 else diff[:12000] + "\n… (cut; see the release)"
             lines += [f"<details><summary><code>{rel}</code></summary>", "", "```diff", cut, "```", "", "</details>"]
@@ -278,16 +331,25 @@ def main():
     ap.add_argument("--new", required=True, help="Zeron's apps/zgx/ui at the new release")
     ap.add_argument("--version", required=True, help="the new release's version, x.y.z")
     ap.add_argument("--report")
-    ap.add_argument("--bless", action="store_true")
+    ap.add_argument("--merge", action="store_true", help="merge Zeron's changes into Slate's copies")
+    ap.add_argument("--bless", action="store_true", help="when nothing needs a look, move Slate to the new version")
     a = ap.parse_args()
     old_v = json.loads(read(os.path.join(ROOT, "zeron-template.json")))["zeron_version"]
     found = check(a.old, a.new)
-    text, needs = report(found, old_v, a.version)
+    merging = None
+    if a.merge and found["changed"]:
+        merging = merge(a.old, a.new, found["changed"])
+        # The checks again, on Slate as merged (what it would ship).
+        again = check(a.old, a.new)
+        for key in again:
+            if key != "changed":
+                found[key] = again[key]
+    text, needs = report(found, old_v, a.version, merging)
     if a.report:
         with open(a.report, "w") as f:
             f.write(text)
     print(text)
-    if a.bless:
+    if a.bless and not needs:
         bless(a.new, a.version)
     return 1 if needs else 0
 

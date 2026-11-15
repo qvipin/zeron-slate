@@ -1,7 +1,9 @@
-# On each new Zeron release, check that Slate still fits it
-# (scripts/check_zeron_release.py). Clean: a pull request moves Slate to the
-# new version. Not clean: an issue says what to look at, with Zeron's diffs.
-# Nothing is merged on its own.
+# On each new Zeron release, bring its changes into Slate and check the
+# result (scripts/check_zeron_release.py): each file Slate replaces is merged
+# three ways (Zeron then, Slate's copy, Zeron now). All merged and every
+# check passes: a pull request with the merged files, moving Slate to the
+# new version. A merge conflicts or a check fails: an issue says what to look
+# at, with Zeron's diffs. Nothing reaches main without a person merging it.
 #
 # A repository can't follow another's releases, so this looks every three
 # hours; Actions → "Zeron release" → Run workflow checks one by hand.
@@ -105,7 +107,7 @@ jobs:
             --old /tmp/zeron-made_for/apps/zgx/ui \
             --new /tmp/zeron-latest/apps/zgx/ui \
             --version "${{ steps.v.outputs.latest }}" \
-            --report /tmp/report.md --bless || status=1
+            --report /tmp/report.md --merge --bless || status=1
           python3 scripts/check_template.py >> /tmp/template.txt 2>&1 || status=1
           failed=""
           while IFS= read -r -d '' f; do
@@ -131,11 +133,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git switch -c "zeron-$v"
-          git add zeron-template.json .base.json
-          git commit -m "Check against Zeron $v" -m "Nothing Slate replaces changed in Zeron $v, and everything it uses is still there."
+          git add -A -- . ':!*.zeron-template'
+          git commit -m "Bring in Zeron $v" -m "Zeron's changes to the files Slate replaces, merged; every release check passes."
           git push origin "zeron-$v"
           gh pr create --base main --head "zeron-$v" \
-            --title "Zeron $v: Slate fits as it is" --body-file /tmp/report.md
+            --title "Zeron $v, merged into Slate" --body-file /tmp/report.md
 
       - name: Not clean, an issue
         if: steps.check.outcome == 'success' && steps.check.outputs.status == '1'
