@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Fail if an AI co-author trailer or "generated with" footer appears.
 
-Slate is credited to its author alone. This checks three places:
+Slate is credited to its people, never an AI agent. Co-author trailers for
+people and plain bots (github-actions, dependabot) are fine. This checks
+three places:
 
   files     every file Git tracks (or, outside a repo, every file here)
   history   every commit message reachable from HEAD
@@ -21,12 +23,22 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Co-author trailers are fine for people and plain bots (github-actions,
+# dependabot): only an AI agent's is refused, as is a "generated with/by"
+# footer naming one, or an AI company's noreply address anywhere.
+AGENTS = (
+    "claude|anthropic|codex|openai|chatgpt|gpt-?[0-9o]|copilot|cursor|gemini|"
+    "jules|bard|devin|cognition|aider|windsurf|codeium|cline|roo-?code|kilo-?code|"
+    "sourcegraph|amp-?code|opencode|kiro|qwen|deepseek|grok|x\\.ai|xai|mistral|"
+    "tabnine|sweep|continue\\.dev|zed-?agent|zeron|paseo|t3-?code|llm|ai[ -]?agent"
+)
+AGENT = r"(?<![a-z0-9])(" + AGENTS + r")(?![a-z])"
 # (Built from parts so this file doesn't match itself.)
 TRAILER = "co-authored" + "-by"
 PATTERNS = [
-    re.compile(TRAILER + r"\s*:.*", re.IGNORECASE),
-    re.compile(r"noreply@" + "anthropic" + r"\.com", re.IGNORECASE),
-    re.compile(r"generated\s+with\s+\[?" + "claude" + r"(\s+code)?", re.IGNORECASE),
+    re.compile(TRAILER + r"\s*:.*" + AGENT, re.IGNORECASE),
+    re.compile(r"noreply@(" + "anthropic" + r"|openai)\.com", re.IGNORECASE),
+    re.compile(r"generated\s+(with|by)\s+\W*" + AGENT, re.IGNORECASE),
 ]
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__"}

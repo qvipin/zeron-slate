@@ -33,7 +33,7 @@ git config core.hooksPath .githooks
 
 | Check | Run it | What it does |
 | --- | --- | --- |
-| Attribution | `python3 scripts/lint_attribution.py` | Fails on any AI co-author trailer or "generated with" footer. It looks in tracked files and in every commit message. The `commit-msg` hook runs it on each new message. |
+| Attribution | `python3 scripts/lint_attribution.py` | Fails on an AI agent's co-author trailer or a "generated with" footer naming one (people's and plain bots' trailers are fine). It looks in tracked files and in every commit message. The `commit-msg` hook runs it on each new message. |
 | Template | `python3 scripts/check_template.py` | Checks that the manifest is valid JSON and has its fields. Checks that both themes parse and that every `assets/...` path the code names exists. Checks that the license and credits are present and that every `.luau` file has balanced brackets and closed strings. |
 | Luau | CI only | Compiles every `.luau` file with `luau-compile` (Luau 0.747), which catches syntax errors. Type-checking isn't possible outside Zeron, since `ui` and the rest come from the app. |
 
@@ -51,7 +51,7 @@ When everything merges and passes, it opens a pull request with the merged files
 
 ## Attribution
 
-Slate is credited to its author alone. Commits and files must not carry AI co-author trailers or "generated with" footers. The attribution check enforces this.
+Slate is credited to its people, never an AI agent. Co-author trailers for people and plain bots (github-actions, dependabot) are fine. Commits and files must not carry an AI agent's co-author trailer (Claude, Codex, Copilot, Cursor, Gemini and the like), a "generated with" footer naming one, or an AI company's noreply address. The attribution check enforces this.
 
 ## Releasing
 
