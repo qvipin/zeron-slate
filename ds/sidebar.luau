@@ -2019,7 +2019,8 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 					name,
 					grow = 1,
 					text_size = "$font.size.md",
-					weight = "$font.weight.medium",
+					-- Slate: a project's name semibold, to stand off its chats.
+					weight = if g.project then "$font.weight.semibold" else "$font.weight.medium",
 					color = "$text.primary",
 				},
 				ui.row {
