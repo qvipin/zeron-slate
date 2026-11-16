@@ -47,7 +47,7 @@ CI (`.github/workflows/ci.yml`) runs all three on every push and pull request.
 - modules, locale keys and icons Slate uses that no longer exist, module names a file reads but never declares, and module members Zeron may have dropped;
 - files that no longer compile.
 
-When everything merges and passes, it opens a pull request with the merged files that moves `zeron_version` to the new release and rewrites `.base.json`, the fingerprints of Zeron's originals that Zeron's own "out of date" check compares against. Otherwise it opens an issue with the report. Nothing reaches `main` until you merge it.
+When nothing Slate replaces changed and every check passes, it moves `zeron_version` to the new release straight on `main`, with no pull request. When Zeron changed files Slate replaces and everything merges and passes, it opens a pull request with the merged files that moves `zeron_version` and rewrites `.base.json`, the fingerprints of Zeron's originals that Zeron's own "out of date" check compares against. Otherwise it opens an issue with the report. No change to Slate's files reaches `main` until you merge it.
 
 ## Attribution
 

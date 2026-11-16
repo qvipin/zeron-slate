@@ -1,9 +1,10 @@
 # On each new Zeron release, bring its changes into Slate and check the
 # result (scripts/check_zeron_release.py): each file Slate replaces is merged
-# three ways (Zeron then, Slate's copy, Zeron now). All merged and every
-# check passes: a pull request with the merged files, moving Slate to the
-# new version. A merge conflicts or a check fails: an issue says what to look
-# at, with Zeron's diffs. Nothing reaches main without a person merging it.
+# three ways (Zeron then, Slate's copy, Zeron now). Nothing Slate replaces
+# changed and every check passes: the new version goes straight onto main,
+# no pull request. Files merged and every check passes: a pull request with
+# them. A merge conflicts or a check fails: an issue says what to look at,
+# with Zeron's diffs. No change to Slate's files reaches main unmerged.
 #
 # A repository can't follow another's releases, so this looks every three
 # hours; Actions → "Zeron release" → Run workflow checks one by hand.
@@ -123,7 +124,7 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           cat /tmp/report.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Clean, a pull request
+      - name: Clean, a pull request (or just the new version)
         # (Only when the check ran: a skipped one's status is empty, and
         # Actions compares '' == '0' as true.)
         if: steps.check.outcome == 'success' && steps.check.outputs.status == '0'
@@ -132,6 +133,15 @@ jobs:
           v="${{ steps.v.outputs.latest }}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Nothing Slate replaces changed: only the version it names moves,
+          # straight onto main, no pull request.
+          changed="$(git status --porcelain -- . ':!*.zeron-template' | awk '{print $2}')"
+          if [ "$changed" = "zeron-template.json" ]; then
+            git add zeron-template.json
+            git commit -m "Zeron $v: nothing Slate replaces changed" -m "Every release check passes; only the version Slate names moves."
+            git push origin HEAD:main
+            exit 0
+          fi
           git switch -c "zeron-$v"
           git add -A -- . ':!*.zeron-template'
           git commit -m "Bring in Zeron $v" -m "Zeron's changes to the files Slate replaces, merged; every release check passes."
