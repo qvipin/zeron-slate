@@ -2,10 +2,11 @@
 
 ![Slate in Zeron](preview.png)
 
-A calm, dark template for [Zeron](https://zeron.app): a slate palette, a cleaner sidebar with plan usage, and the Himalaya at night. Very opinionated, but it works well for me.
+A calm, dark, and opinionated template for [Zeron](https://zeron.app): a slate color palette, cleaner sidebar, and the Himalayas at night. 
 
 ## Install
 
+Pretty Simple:
 1. In Zeron, open **Settings → Templates → Install**.
 2. Paste this repository's link, or pick `slate.zeron-template` from the [latest release](../../releases/latest).
 3. Allow it in the window Zeron opens, then click **Keep**. Until then it runs as a preview.
