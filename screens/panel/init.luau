@@ -1539,7 +1539,10 @@ M.Panel = ui.component(function(props: Props): Node
 	box.ref = box.ref or own
 	measured = box.ref
 	box[#box + 1] = ui.column { w_full = true, shrink = 0, hidden = closed, strip }
-	box[#box + 1] = content
+	-- (Its own box, positioned: what a tab places at its top (a transcript's
+	-- list, laid over its whole height) stands under the strip, never over
+	-- it, where it would take the tabs' and "+"'s clicks.)
+	box[#box + 1] = ui.column { w_full = true, grow = 1, min_h = 0, relative = true, hidden = closed, content }
 	box[#box + 1] = question
 	return ui.column(box)
 end)

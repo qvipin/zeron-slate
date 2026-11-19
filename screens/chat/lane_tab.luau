@@ -868,7 +868,7 @@ M.Tab = ui.component(function(props: { tab: any }): Node
 		end),
 	}
 	if tab.kind == "subagent" then
-		return ui.column { id = `lane-{slot}`, class = "lane-tab subagent-tab", provide = { session = chat }, grow = 1, w_full = true, min_h = 0, transcript }
+		return ui.column { id = `lane-{slot}`, class = "lane-tab subagent-tab", provide = { session = chat }, grow = 1, w_full = true, min_h = 0, relative = true, transcript }
 	end
 	return ui.column {
 		id = `lane-{slot}`,
