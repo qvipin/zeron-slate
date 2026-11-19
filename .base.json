@@ -7,13 +7,13 @@
   "ds/sidebar.luau": "6d5d8113d5768620",
   "ds/surface.luau": "43b52703b96baffc",
   "ds/themes/zeron-dark.json": "2390a5832aedd595",
-  "ds/themes/zeron-light.json": "d3485dedf0ca6f4a",
+  "ds/themes/zeron-light.json": "d5ae950a1815cd12",
   "ds/tokens.luau": "296d1ea72675de0c",
   "screens/chat/composer.luau": "7d4cc540ce993b96",
   "screens/chat/lane_tab.luau": "c73af1b7c16fd56e",
   "screens/panel/init.luau": "a0df0db6e977845f",
   "screens/shell/init.luau": "302aa5fc3350cd0a",
-  "screens/shell/page.luau": "c1debbce640a5d45",
+  "screens/shell/page.luau": "c60a2e8010d8068e",
   "screens/shell/view.luau": "95dec891b31add1d",
   "theme.luau": "f91385ac6c055b8d"
 }
