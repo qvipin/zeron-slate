@@ -1258,8 +1258,16 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 		end, function(): boolean
 			return details.branch:get() and cur().branch ~= nil
 		end, second_line, fades)
+		-- Slate: bright when chosen, or when it has news for you (it asks,
+		-- failed, finished); not while it's only at work (working, waiting,
+		-- connecting), whose dot already says so.
+		local QUIET = { working = true, waiting = true, connecting = true }
 		local function strong(): boolean
-			return active(s) or selected:get() == s.id
+			if selected:get() == s.id then
+				return true
+			end
+			local now = (index:get().by_id[s.id] or s).status
+			return now ~= nil and not QUIET[now]
 		end
 		-- Its project's icon beside its title, where its group isn't its
 		-- project.
