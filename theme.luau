@@ -1,14 +1,16 @@
--- Slate: a quiet neutral dark, layered grays and one restrained blue accent.
--- Ported from the Paseo "Slate" plugin. Data only (ds/palettes' shape).
+-- Slate: a near-black with a hint of slate blue, cool layered greys,
+-- neutral grey text and one restrained blue accent. Ported from the Paseo
+-- "Slate" plugin. Data only (ds/palettes' shape). The theme a Slate install
+-- wears by default (until you pick another).
 
 return {
 	name = "Slate",
 	dark = {
-		background = "#050608",
-		raised = "#111418",
-		text = "#e2e7f0",
-		muted = "#8b95a8",
-		faint = "#667086",
+		background = "#030405",
+		raised = "#0f1115",
+		text = "#d4d4d4",
+		muted = "#8f8f8f",
+		faint = "#6b6b6b",
 		accent = "#8aabe0",
 		danger = "#e07a7a",
 		warning = "#d6b06b",
@@ -19,9 +21,9 @@ return {
 			"#667086", "#8aabe0", "#a9c6a0", "#d6a878", "#86c3c7", "#b8c9ea",
 			"#c5cede", "#e2e7f0", "#8b95a8", "#8aabe0", "#d6b06b", "#e07a7a",
 		},
-		shell = "#08090b",
-		card = "#0a0c0f",
-		terminal = "#050608",
+		shell = "#07080a",
+		card = "#05060a",
+		terminal = "#030405",
 		-- black, red, green, yellow, blue, magenta, cyan, white, then bright
 		ansi = {
 			"#14171c", "#e07a7a", "#86c29a", "#d6b06b", "#8aabe0", "#b79ad6", "#86c3c7", "#c5cede",
