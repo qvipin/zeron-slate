@@ -1116,15 +1116,12 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 	-- toward the row, which starts a little past the elbow's end. `last`:
 	-- the trunk ends at that one.
 	type Tree = SessionRow.Tree
-	-- Slate: no tree lines, but a group's chats stand a step in under it
-	-- (12: about half its tile), enough to read as its, not a column apart.
-	-- (With harness marks on, the mark stands in a tile's column, under
-	-- its group's tile, and the title on its group's name's line.)
+	-- Slate: no tree lines; a group's chats start under its tile.
+	-- The same either way: with harness marks on, the mark stands in a
+	-- tile's column, under its group's tile; with them off, the title
+	-- starts there instead.
 	local function chat_indent(): number
-		if details.harness:get() then
-			return TOP - (SLOT - 18) / 2 - EDGE
-		end
-		return TOP + STEP - EDGE - 8
+		return TOP - (SLOT - 18) / 2 - EDGE
 	end
 	local gutter = function(_t: Tree): number
 		-- (A group's "Show N more", its chevron where its chats' marks stand.)
