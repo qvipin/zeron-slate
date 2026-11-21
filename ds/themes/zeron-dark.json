@@ -82,7 +82,7 @@
 			"lg": "0 12 32 0 #00000080"
 		},
 		"font": {
-			"sans": "Geist",
+			"sans": "System Font",
 			"mono": "Geist Mono",
 			"size": { "xs": 11, "sm": 12, "md": 13, "lg": 15, "xl": 20, "xxl": 28, "hero": 46 },
 			"line": { "xs": 14, "sm": 16, "md": 18, "lg": 20, "xl": 26, "xxl": 34 }
