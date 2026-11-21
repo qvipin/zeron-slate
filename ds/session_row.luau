@@ -168,12 +168,13 @@ function M.mark(cur: () -> Session, strong: () -> boolean): Node
 end
 
 -- A state, small: its glyph alone, in its hue (a state with no glyph, its
--- dot), its name a tooltip.
-function M.state(kind: status.Kind): Node
+-- dot), its name a tooltip. (`flush`: as wide as its glyph, for a corner
+-- that right-aligns it on the line of the times.)
+function M.state(kind: status.Kind, flush: boolean?): Node
 	local k = status.KINDS[kind]
 	return ui.div {
 		shrink = 0,
-		w = 16,
+		w = if flush then nil else 16,
 		h = 16,
 		items = "center",
 		justify = "center",
@@ -203,7 +204,7 @@ function M.standing(cur: () -> Session): Node
 				return M.when(cur())
 			end)
 		end
-		return M.state(kind :: status.Kind)
+		return M.state(kind :: status.Kind, true)
 	end)
 end
 
