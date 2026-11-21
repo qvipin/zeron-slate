@@ -1116,15 +1116,12 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 	-- toward the row, which starts a little past the elbow's end. `last`:
 	-- the trunk ends at that one.
 	type Tree = SessionRow.Tree
-	-- Slate: no tree lines, but a group's chats stand a step in under it
-	-- (12: about half its tile), enough to read as its, not a column apart.
-	-- (With harness marks on, the mark stands in a tile's column, under
-	-- its group's tile, and the title on its group's name's line.)
+	-- Slate: no tree lines; a group's chats start under its tile.
+	-- The same either way: with harness marks on, the mark stands in a
+	-- tile's column, under its group's tile; with them off, the title
+	-- starts there instead.
 	local function chat_indent(): number
-		if details.harness:get() then
-			return TOP - (SLOT - 18) / 2 - EDGE
-		end
-		return TOP + STEP - EDGE - 8
+		return TOP - (SLOT - 18) / 2 - EDGE
 	end
 	local gutter = function(_t: Tree): number
 		-- (A group's "Show N more", its chevron where its chats' marks stand.)
@@ -1387,13 +1384,15 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			h = function(): number
 				return session_h(cur(), by)
 			end,
-			-- Slate: every chat stands a step in under what holds it (a
-			-- project, Pinned, a section of yours, Activity), one hierarchy
-			-- throughout; a flyout's rows are its own list.
+			-- Slate: a project's chats stand a step in under it; every other
+			-- list's (Pinned, a section of yours, the one list, Activity)
+			-- start flush with its heading. A flyout's rows are its own list.
 			indent = if in_flyout then nil else function(): number
-				-- (A slight step in, near flush, the same under every heading:
-				-- a section's, a project's, Pinned, Activity, Ungrouped.)
-				return chat_indent() + NUDGE
+				local list = if place and place.list_now then place.list_now() else (place and place.list) or ""
+				if string.sub(list, 1, 8) == "project:" then
+					return chat_indent() + NUDGE
+				end
+				return TOP - EDGE - (SLOT - 14) / 2
 			end,
 			center_lead = true,
 			-- (Its slot holds its harness; hidden, the slot closes.)
@@ -2822,8 +2821,16 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 				end)
 				return all
 			end
+			-- Slate: no "Activity" heading over it (the list is the view); with
+			-- nothing to fold it, it stays open.
 			local lf = activity_fold()
-			add({ kind = "title", key = "title:activity", place = "regular", chain = {}, title = "ds.sidebar.activity", n = #list, fold = activity_fold, open = activity_open, base = title_h })
+			if not lf.present then
+				ui.after(0, function()
+					if not lf.present then
+						fold_set(lf, true)
+					end
+				end)
+			end
 			if lf.present then
 				sessions_rows("activity", ranked(list), "none", { lf }, "regular")
 			end
@@ -2891,7 +2898,7 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			end
 		end
 		-- The groups.
-		local all_groups, title = groups_of(by, placed)
+		local all_groups = groups_of(by, placed)
 		-- (Projects with none but archived sessions: after the rest, in a
 		-- fold of their own; or, not shown, nowhere.)
 		local gs: { Group } = {}
@@ -2908,16 +2915,16 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			end
 		end
 		local gf = groups_fold()
-		local count = if by == "none" then #listed(gs[1].sessions) else #gs + #empties
-		-- Slate: grouped, the groups are the top level themselves (no
-		-- "Projects" over them; each project, and Ungrouped, a heading of its
-		-- own). Ungrouped as a list ("none"), its title stays.
-		if by == "none" then
-			add({ kind = "title", key = "title:groups", place = "regular", chain = {}, title = title, n = count, fold = groups_fold, open = groups_open, base = title_h })
-		elseif not gf.present then
+		-- Slate: no heading over them. Grouped, the groups are the top level
+		-- themselves (each project, and Ungrouped, a heading of its own);
+		-- as one list ("none"), its chats sit under the actions, no
+		-- "Sessions" over them.
+		if not gf.present then
 			-- (Folded away under the old title: open again, nothing to fold it.)
 			ui.after(0, function()
-				groups_open:set(true)
+				if not gf.present then
+					fold_set(gf, true)
+				end
 			end)
 		end
 		if gf.present then
