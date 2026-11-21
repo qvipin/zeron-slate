@@ -2826,7 +2826,9 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			local lf = activity_fold()
 			if not lf.present then
 				ui.after(0, function()
-					activity_open:set(true)
+					if not lf.present then
+						fold_set(lf, true)
+					end
 				end)
 			end
 			if lf.present then
@@ -2920,7 +2922,9 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 		if not gf.present then
 			-- (Folded away under the old title: open again, nothing to fold it.)
 			ui.after(0, function()
-				groups_open:set(true)
+				if not gf.present then
+					fold_set(gf, true)
+				end
 			end)
 		end
 		if gf.present then
