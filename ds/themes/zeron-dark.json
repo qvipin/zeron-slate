@@ -16,6 +16,10 @@
 		// GLASS_ALPHA 0.80); `background`, the same scrim as it was, stays
 		// what opaque reads (a button's ink, the dims).
 		"glass.tint": "#07080acc",
+		// Blur carries the separation; a light tint keeps the window's colour.
+		// Slate: its own near-black, as `background` is.
+		"zeron.diff.sticky.tint": "#0506081f",
+		"zeron.diff.sticky.solid": "#050608",
 		// zgx's own surfaces (its tooltips): lifted above the menus it shows over (a deep charcoal), opaque, so a tooltip reads as one.
 		"popover.bg": "#0f1216",
 		"surface": {
