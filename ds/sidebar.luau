@@ -3096,7 +3096,11 @@ local places: State<Places> = props.places or ui.use_state({ pinned = pinned_ids
 			else {}
 		if #shelf > 0 then
 			local af = archived_fold()
-			add({ kind = "title", key = "title:archived", place = "archived", chain = {}, title = "ds.sidebar.archived", n = #shelf, fold = archived_fold, open = archived_open, base = title_h })
+			add({ kind = "title", key = "title:archived", place = "archived", chain = {}, title = "ds.sidebar.archived", n = #shelf, fold = archived_fold, open = archived_open, base = function(): number
+				-- Slate: folded, it's the list's last row, over the foot: no
+				-- row's gap after it, and less room under its words.
+				return if archived_fold().present then title_h() else TITLE - 6
+			end })
 			if af.present then
 				local n = math.min(#shelf, shelf_shown:get())
 				sessions_rows("archived", { table.unpack(shelf, 1, n) }, "none", { af }, "archived")
@@ -4592,7 +4596,10 @@ fn layer(input:LayerInput)->vec4<f32> {
 			end,
 			w_full = true,
 			min_h = USAGE_H,
-			py = ui.raw(9, "a line's room, top and bottom"),
+			-- Slate: snug under the list's last row (its own room below its
+			-- words is the gap), a line's room under it.
+			pt = ui.raw(3, "snug under the list's last row"),
+			pb = ui.raw(9, "a line's room"),
 			flex_wrap = true,
 			items = "center",
 			-- Spread edge to edge: the first on your avatar's edge, the last
