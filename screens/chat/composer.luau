@@ -44,6 +44,8 @@ local mentions = require("@ds/composer_mentions")
 local Draft = require("@ds/draft_text")
 local Invocations = require("@app/screens/chat/invocations")
 local Completions = require("@app/screens/chat/completions")
+local Carried = require("@app/screens/chat/carried")
+local ComposerAtoms = require("@ds/composer_atoms")
 local ZeronCommands = require("@app/screens/chat/zeron_commands")
 -- (Loaded with the chat page: captures land on its composer.)
 local Appshots = require("@app/screens/chat/appshots")
@@ -875,17 +877,18 @@ local function Composer(): Node
 
 	-- A queued message being edited in the composer: which, and the draft
 	-- it set aside (put back when the edit ends).
-	local editing = ui.state("chat_editing", nil :: { item: string, aside: string }?)
+	local editing = ui.state("chat_editing", nil :: { item: string, aside: string, aside_atoms: { any }? }?)
 	local function end_edit(action: string)
 		local e = editing:peek()
 		local id = session_id:peek()
 		if not e or not id then
 			return
 		end
-		local words = shared.text:peek()
+		-- (Its inline chips encoded into the words it saves.)
+		local words = ComposerAtoms.encode(shared.text:peek(), ComposerAtoms.live(shared.atoms))
 		ui.batch(function()
 			editing:set(nil)
-			shared.text:set(e.aside)
+			ComposerAtoms.apply(shared.text, shared.atoms, e.aside, e.aside_atoms or {})
 		end)
 		store.queue_finish(id, e.item, action, if action == "commit" then words else nil):after(function() end, function(err: any)
 			local why = err and err.message
@@ -963,11 +966,14 @@ local function Composer(): Node
 		-- token goes; anything carried stays).
 		local zeron = ZeronCommands.of_text(shared.text:peek(), (mention_lists:peek() or {})["/"] or {})
 		if zeron then
-			shared.text:set("")
+			ui.batch(function()
+				shared.text:set("")
+				shared.atoms:set({})
+			end)
 			ZeronCommands.run(zeron, session_id:peek())
 			return
 		end
-		local typed, carried = shared.take()
+		local typed, carried, raw_draft, raw_atoms = shared.take()
 		local attachments = {}
 		-- Passages attached from the conversation: a block after the words
 		-- (Quote.with_quotes), each with who said it and when.
@@ -1051,7 +1057,7 @@ local function Composer(): Node
 				end, function(e: any)
 					own_notice:set { tone = "danger", key = "chat.composer.didnt_send", dismissable = true }
 					if shared.text:peek() == "" then
-						shared.text:set(text_out)
+						ComposerAtoms.apply(shared.text, shared.atoms, if #raw_atoms > 0 then raw_draft else text_out, raw_atoms)
 					end
 					-- Its files too, before any added since.
 					shared.restore_cargo_of(id, carried)
@@ -1123,7 +1129,7 @@ local function Composer(): Node
 		local failed = function(why: string?)
 			own_notice:set { tone = "danger", text = why, key = if why then nil else "chat.composer.didnt_start", dismissable = true }
 			if shared.text:peek() == "" then
-				shared.text:set(text_out)
+				ComposerAtoms.apply(shared.text, shared.atoms, if #raw_atoms > 0 then raw_draft else text_out, raw_atoms)
 			end
 		end
 		-- On Cloud, as the shipping app starts one: the chat opens at once
@@ -1351,6 +1357,7 @@ local function Composer(): Node
 				end
 			end,
 			value = shared.text,
+			atoms = shared.atoms,
 			placeholder = ui.t("chat.composer.placeholder"),
 			expanded = shown_new,
 			snap = snap,
@@ -1440,6 +1447,7 @@ local function Composer(): Node
 			reach_default = cloud.reach,
 			cargo = shared.cargo,
 			on_remove_cargo = shared.remove_cargo,
+			cargo_chip = Carried.chip_spec,
 			on_attach = function()
 				ui.open_files({ title = ui.t("chat.composer.attach_files"):get(), multiple = true }):after(function(files: any)
 					if files and #files > 0 then
@@ -1503,8 +1511,10 @@ local function Composer(): Node
 					return
 				end
 				store.queue_edit(id, item):after(function(got: any)
-					editing:set { item = item, aside = shared.text:peek() }
-					shared.text:set(if got then got.text else "")
+					ui.batch(function()
+						editing:set { item = item, aside = shared.text:peek(), aside_atoms = ComposerAtoms.live(shared.atoms) }
+						ComposerAtoms.apply(shared.text, shared.atoms, if got then got.text else "", {})
+					end)
 					shared.focus:add(1)
 				end, function(err: any)
 					own_notice:set {
