@@ -30,6 +30,7 @@ local Shared = require("@app/screens/chat/shared")
 local boundary = require("@app/screens/shell/boundary")
 local Quote = require("@ds/quote")
 local Draft = require("@ds/draft_text")
+local ComposerAtoms = require("@ds/composer_atoms")
 local Carried = require("@app/screens/chat/carried")
 local Completions = require("@app/screens/chat/completions")
 local Invocations = require("@app/screens/chat/invocations")
@@ -76,11 +77,13 @@ end
 -- what's picked (a changed agent, model or access becomes the chat's, as the
 -- chat page's does). A message that didn't go says so on the composer's own
 -- notice line, above it, never over it.
-local function composer(chat: string, view: any, name: string, focus: State<number>): Node
+local function composer(chat: string, view: any, name: string, focus: State<number>, dock_target: State<number>?): Node
 	-- (Its draft kept by the chat, as its picks: a switch of tabs or a
 	-- reload finds it as it was; a passage quoted from its transcript lands
 	-- in it.)
 	local draft = ui.state(`chat_lane_draft_{chat}`, "")
+	-- (Its draft's inline chips, where they stand in its words.)
+	local atoms = ui.state(`chat_lane_atoms_{chat}`, {} :: { ComposerAtoms.AtomEntry })
 	-- Its draft's chips: one draft's per chat (screens/chat/shared), wherever
 	-- it's kept.
 	local carried = ui.use_state({} :: { any })
@@ -123,12 +126,13 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 		end,
 	}
 	-- A queued message edited in its composer.
-	local editing = ui.state(`chat_lane_editing_{chat}`, nil :: { item: string, aside: string }?)
+	local editing = ui.state(`chat_lane_editing_{chat}`, nil :: { item: string, aside: string, aside_atoms: { any }? }?)
 	local edits = Asks.queue_edits {
 		id = function(): string?
 			return chat
 		end,
 		text = draft,
+		atoms = atoms,
 		editing = editing,
 		focus = function()
 			focus:add(1)
@@ -150,7 +154,7 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 			if row.id == e.item and not row.editing then
 				ui.batch(function()
 					editing:set(nil)
-					draft:set(e.aside)
+					ComposerAtoms.apply(draft, atoms, e.aside, e.aside_atoms or {})
 				end)
 			end
 		end
@@ -461,11 +465,25 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 	end, name)
 	return ds.Composer {
 		dictation = dictation,
+		on_sizes = if dock_target
+			then function(sizes: ds.ComposerSizes)
+				if math.abs(dock_target:peek() - sizes.target) > 0.01 then
+					dock_target:set(sizes.target)
+				end
+			end
+			else nil,
+		atoms = atoms,
 		cargo = carried,
-		-- (Its chips' × under the pointer, as the chat page's.)
+		-- (Its chips' × under the pointer, as the chat page's; one inline in
+		-- its words goes with it.)
 		on_remove_cargo = function(cid: string)
 			Shared.remove_cargo_of(chat, cid)
+			local next_text, next_atoms, changed = ComposerAtoms.remove_by_cargo(draft:peek(), ComposerAtoms.live(atoms), cid)
+			if changed then
+				ComposerAtoms.apply(draft, atoms, next_text, next_atoms)
+			end
 		end,
+		cargo_chip = Carried.chip_spec,
 		-- (What's dropped on it is its tab's to take, under its own overlays.)
 		drop_overlay = false,
 		-- Its + and a picture pasted: chips on its own draft, as the chat page's.
@@ -480,7 +498,7 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 		on_paste_image = function(): boolean
 			store.paste_image():after(function(path: string?)
 				if type(path) == "string" and path ~= "" then
-					Shared.attach_files({ { name = "image.png", path = path } }, chat)
+					Shared.attach_pasted_image(path, chat)
 					focus:add(1)
 				end
 			end, function() end)
@@ -576,13 +594,19 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 			-- A draft that is only one of Zeron's own commands runs it.
 			local command = completions.command_of(draft:peek())
 			if command then
-				draft:set("")
+				ui.batch(function()
+					draft:set("")
+					atoms:set({})
+				end)
 				run_command(command)
 				return
 			end
-			-- (The passages it mentions, each in full.)
+			-- (Its inline chips encoded first, so their places match the raw
+			-- draft; then the passages it mentions, each in full.)
 			local said_quotes = quotes:peek()
-			local words = string.match(Quote.expand(text, Quote.kept(text, said_quotes)), "^%s*(.-)%s*$") or ""
+			local said_atoms = ComposerAtoms.live(atoms)
+			local encoded = ComposerAtoms.encode(text, said_atoms)
+			local words = string.match(Quote.expand(encoded, Quote.kept(encoded, said_quotes)), "^%s*(.-)%s*$") or ""
 			if words == "" and #carried:peek() == 0 then
 				return
 			end
@@ -594,6 +618,7 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 			end
 			ui.batch(function()
 				draft:set("")
+				atoms:set({})
 				quotes:set({})
 			end)
 			notice:set(nil)
@@ -616,7 +641,7 @@ local function composer(chat: string, view: any, name: string, focus: State<numb
 			req.appshots = Appshots.of_cargo(chips)
 			local function failed(err: any)
 				ui.batch(function()
-					draft:set(text)
+					ComposerAtoms.apply(draft, atoms, text, said_atoms)
 					quotes:set(said_quotes)
 				end)
 				Shared.restore_cargo_of(chat, chips)
@@ -740,9 +765,11 @@ M.Tab = ui.component(function(props: { tab: any }): Node
 	-- on the chat page: chips on its own draft (a sidebar chat, mentioned), its
 	-- composer taking the keys.
 	local focus = ui.use_state(0)
+	local lane_draft = ui.state(`chat_lane_draft_{chat}`, "")
+	local lane_atoms = ui.state(`chat_lane_atoms_{chat}`, {} :: { ComposerAtoms.AtomEntry })
 	local zone, carrying, carrying_session = Shared.own_drop_zone(`lane.{slot}`, chat, function()
 		focus:add(1)
-	end)
+	end, { text = lane_draft, atoms = lane_atoms })
 	-- What the tab is now: a fork under way or failed, or its chat (a new
 	-- side chat's not yet made, until its first message).
 	local kind = ui.computed(function(): string
@@ -769,8 +796,11 @@ M.Tab = ui.component(function(props: { tab: any }): Node
 	local offset = ui.state(`chat_lane_offset_{slot}`, T.PAST_END)
 	local anchor = ui.state(`chat_lane_anchor_{slot}`, nil :: any)
 	local dock_h = ui.state(`chat_lane_dock_h_{slot}`, Dock.REST)
+	local dock_target = ui.state(`chat_lane_dock_target_{slot}`, Dock.REST)
 	local room = Dock.room(function(): number
 		return dock_h:get()
+	end, function(): number
+		return dock_target:get()
 	end)
 	local function lane_session(): any
 		local s = view.session:get()
@@ -836,6 +866,7 @@ M.Tab = ui.component(function(props: { tab: any }): Node
 		offset = offset,
 		keep = anchor,
 		foot = if tab.kind == "subagent" then nil else room.foot,
+		foot_target = if tab.kind == "subagent" then nil else room.foot_target,
 		compact = function(): boolean
 			return prefs.compact_transcript:get()
 		end,
@@ -917,7 +948,7 @@ M.Tab = ui.component(function(props: { tab: any }): Node
 					pb = Dock.page_pad(),
 					ui.column { w_full = true, grow = 1, min_h = 0, relative = true, transcript },
 				},
-				Dock.Dock { height = dock_h, composer = composer(chat, view, `lane.{slot}`, focus), id = `lane-composer-{slot}` },
+				Dock.Dock { height = dock_h, composer = composer(chat, view, `lane.{slot}`, focus, dock_target), id = `lane-composer-{slot}` },
 			}
 			for k, v in zone do
 				body[k] = v
